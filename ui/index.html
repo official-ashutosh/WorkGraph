@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WorkGraph - Company-Aware AI Employee Runtime</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+                radial-gradient(at 50% 100%, rgba(20, 184, 166, 0.05) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+        .dark body {
+            background-color: #070b14;
+            color: #f1f5f9;
+            background-image: none;
+        }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(226, 232, 240, 0.9);
+            box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+        }
+        .dark .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px solid rgba(51, 65, 85, 0.6);
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.3);
+        }
+        .glass-card {
+            background: rgba(248, 250, 252, 0.9);
+            border: 1px solid rgba(226, 232, 240, 0.9);
+        }
+        .dark .glass-card {
+            background: rgba(2, 6, 23, 0.65);
+            border: 1px solid rgba(30, 41, 59, 0.8);
+        }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 12px rgba(59, 130, 246, 0.35); }
+            50% { box-shadow: 0 0 22px rgba(59, 130, 246, 0.7); }
+        }
+        .pulse-active { animation: pulse-glow 2s infinite ease-in-out; }
+        @keyframes pulse-amber {
+            0%, 100% { box-shadow: 0 0 12px rgba(245, 158, 11, 0.35); }
+            50% { box-shadow: 0 0 22px rgba(245, 158, 11, 0.75); }
+        }
+        .pulse-warning { animation: pulse-amber 1.8s infinite ease-in-out; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-blue-600 selection:text-white transition-colors duration-200">
+
+    <!-- Top Navigation Bar -->
+    <header class="border-b border-slate-200/80 bg-white/85 sticky top-0 z-40 backdrop-blur-md shadow-xs">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 flex items-center justify-center shadow-md shadow-blue-500/25">
+                    <span class="text-white font-black text-xl">W</span>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xl font-black bg-gradient-to-r from-blue-600 via-indigo-600 to-slate-900 bg-clip-text text-transparent">WorkGraph</span>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-blue-50 text-blue-700 border border-blue-200">RUNTIME v2.6</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 font-medium">The LLM proposes &bull; Code authorizes, executes, recovers &amp; verifies</p>
+                </div>
+            </div>
+
+            <!-- Header Quick Stats, Theme Switcher & Eval Modal -->
+            <div class="flex items-center space-x-3">
+                <div class="hidden md:flex items-center space-x-2 text-xs text-slate-600 mr-1 bg-slate-100/80 px-3 py-1.5 rounded-lg border border-slate-200">
+                    <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="font-medium">100% Deterministic Guard</span>
+                </div>
+                <button onclick="openEvalsModal()" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-sm transition flex items-center space-x-1.5">
+                    <span>📊</span>
+                    <span>Eval Report (12/12)</span>
+                </button>
+                <button id="theme-toggle" onclick="toggleTheme()" title="Toggle Theme" class="p-2 rounded-xl text-xs font-semibold bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 transition">
+                    <span id="theme-icon">☀️ Light</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Control Strip: Objective Input & Preset Scenarios -->
+        <section class="glass-panel rounded-2xl p-5 shadow-sm border border-slate-200/90">
+            <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                <div class="flex-1 w-full">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">Executive Objective</label>
+                    <div class="relative">
+                        <input id="objective-input" type="text" 
+                               value="Process the latest vendor invoice using our finance policies. Register the bill if everything matches, and tell me if anything requires my approval."
+                               class="w-full px-4 py-2.5 bg-slate-50/80 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 shadow-xs transition">
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-2 pt-5 w-full lg:w-auto">
+                    <button id="run-btn" onclick="startCustomRun()"
+                            class="flex-1 lg:flex-none px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm rounded-xl shadow-md shadow-blue-600/25 transition transform active:scale-95 flex items-center justify-center space-x-2">
+                        <span>▶</span>
+                        <span>Launch Objective</span>
+                    </button>
+                    <button id="step-btn" onclick="stepRun()" disabled
+                            class="px-4 py-2.5 bg-white hover:bg-slate-50 disabled:opacity-40 text-slate-700 font-semibold text-sm rounded-xl border border-slate-300 shadow-xs transition">
+                        Next Step ⏭
+                    </button>
+                </div>
+            </div>
+
+            <!-- Demo Scenarios Bar -->
+            <div class="mt-4 pt-4 border-t border-slate-200/80 flex flex-wrap items-center gap-2">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-600 mr-1">Demo Scenarios:</span>
+                <button onclick="launchPreset('clean')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 transition shadow-2xs">
+                    Clean Match (0% Var)
+                </button>
+                <button onclick="launchPreset('timeout')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 transition shadow-2xs">
+                    ⚠️ Timeout After Commit (0 Dups)
+                </button>
+                <button onclick="launchPreset('mismatch')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 transition shadow-2xs">
+                    🛡️ Amount Mismatch (+7.35% Approval)
+                </button>
+                <button onclick="launchPreset('learned_exception')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 transition shadow-2xs">
+                    🧠 Learned Exception (3% Auto-pass)
+                </button>
+                <button onclick="launchPreset('sales_report')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 text-cyan-800 transition shadow-2xs">
+                    🌐 Workflow B: Sales Report (Zero Edits)
+                </button>
+            </div>
+        </section>
+
+        <!-- Main Grid: Execution DAG Graph & Live Event Stream -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- Left 7 Columns: Visual Execution Graph -->
+            <div class="lg:col-span-7 glass-panel rounded-2xl p-5 shadow-sm border border-slate-200/90 space-y-4 flex flex-col min-h-[580px]">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-900 flex items-center space-x-2">
+                            <span>Execution Graph (DAG)</span>
+                            <span id="run-status-badge" class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase bg-slate-100 text-slate-600 border border-slate-200">IDLE</span>
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5" id="run-meta-info">No active execution. Launch an objective above.</p>
+                    </div>
+                    <div id="reconciliation-indicator" class="hidden px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 border border-emerald-300 text-emerald-700">
+                        ✓ Reconciled: 0 Duplicates
+                    </div>
+                </div>
+
+                <!-- Live Nodes Container -->
+                <div id="graph-nodes-container" class="space-y-3 flex-1 overflow-y-auto pr-1">
+                    <div class="py-20 text-center text-slate-400 text-sm">
+                        Select a scenario above or enter a business objective to synthesize a validated execution graph.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right 5 Columns: Live Event Stream & Evidence -->
+            <div class="lg:col-span-5 space-y-6">
+
+                <!-- Live Event Stream Log -->
+                <div class="glass-panel rounded-2xl p-5 shadow-sm border border-slate-200/90 flex flex-col h-[320px]">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+                        <h3 class="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                            <span>Deterministic Event Log</span>
+                            <span id="event-count-badge" class="px-2 py-0.5 rounded text-[10px] bg-slate-100 font-mono text-slate-600 border border-slate-200">0 events</span>
+                        </h3>
+                        <span class="text-[11px] text-slate-500 font-mono uppercase tracking-wider">APPEND-ONLY</span>
+                    </div>
+
+                    <div id="events-stream-box" class="flex-1 overflow-y-auto mt-3 space-y-1.5 text-xs font-mono pr-1 bg-slate-50/80 p-3 rounded-xl border border-slate-200/70">
+                        <div class="text-slate-400 italic py-8 text-center">Awaiting event stream...</div>
+                    </div>
+                </div>
+
+                <!-- Verified Evidence Bundle Box -->
+                <div class="glass-panel rounded-2xl p-5 shadow-sm border border-slate-200/90">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+                        <h3 class="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                            <span>Verified Evidence Bundle</span>
+                            <span id="evidence-count-badge" class="px-2 py-0.5 rounded text-[10px] bg-indigo-50 text-indigo-700 font-mono border border-indigo-200">0 items</span>
+                        </h3>
+                        <span class="text-[11px] text-slate-500 font-mono">SHA-256 PROVEN</span>
+                    </div>
+
+                    <div id="evidence-items-box" class="mt-3 space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                        <div class="text-slate-400 text-xs text-center py-6">Evidence items will appear here as steps are verified.</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Human Authorization / Approval Modal -->
+    <div id="approval-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center z-50 p-4 transition-all">
+        <div class="max-w-xl w-full bg-white border-2 border-amber-400 rounded-2xl p-6 shadow-2xl pulse-warning">
+            <div class="flex items-start justify-between pb-4 border-b border-slate-200">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 text-xl font-bold">
+                        ⚠️
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900">Human Authorization Required</h3>
+                        <p class="text-xs text-amber-800 font-mono" id="modal-step-id">STEP: step_register_bill</p>
+                    </div>
+                </div>
+                <span class="px-2.5 py-1 rounded text-xs font-black bg-amber-100 text-amber-800 uppercase tracking-wider border border-amber-300">
+                    GUARD GATE
+                </span>
+            </div>
+
+            <div class="py-4 space-y-4">
+                <div class="bg-amber-50/70 p-4 rounded-xl border border-amber-200 text-sm">
+                    <span class="text-xs font-bold uppercase text-amber-800 block mb-1">Policy Exception Flag</span>
+                    <div id="modal-reason" class="text-slate-800 font-medium">PO match variance (+7.35%) exceeds allowable tolerance band (2.0%). Requires human approval.</div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 text-xs font-mono">
+                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span class="text-slate-500 block mb-0.5">Proposed Action</span>
+                        <span class="text-blue-700 font-semibold" id="modal-action-name">ledgerone.create_bill</span>
+                    </div>
+                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <span class="text-slate-500 block mb-0.5">Risk Tier</span>
+                        <span class="text-amber-700 font-semibold" id="modal-risk-level">WRITE (Requires Approval)</span>
+                    </div>
+                </div>
+
+                <!-- Learn as Exception Feature -->
+                <div class="p-4 bg-indigo-50/80 border border-indigo-200 rounded-xl space-y-2">
+                    <label class="flex items-start space-x-3 cursor-pointer">
+                        <input id="learn-exception-chk" type="checkbox" checked
+                               class="mt-1 h-4 w-4 rounded bg-white border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                        <div>
+                            <span class="text-sm font-bold text-slate-900 block">Remember as Learned Exception</span>
+                            <span class="text-xs text-slate-600 block">Save this decision in CompanyMemory so future invoices for this vendor within this variance band pass autonomously.</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="pt-4 border-t border-slate-200 flex items-center justify-end space-x-3">
+                <button onclick="submitDecision('REJECTED')"
+                        class="px-5 py-2.5 bg-red-50 hover:bg-red-100 border border-red-300 text-red-700 font-bold text-sm rounded-xl transition">
+                    Reject Transaction
+                </button>
+                <button onclick="submitDecision('APPROVED')"
+                        class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md shadow-emerald-600/25 transition">
+                    Authorize &amp; Continue &rarr;
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Evaluation Report Modal -->
+    <div id="evals-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center z-50 p-4 transition-all">
+        <div class="max-w-3xl w-full max-h-[85vh] bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl flex flex-col">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-200">
+                <h3 class="text-lg font-bold text-slate-900 flex items-center space-x-2">
+                    <span>Formal Evaluation &amp; Ablation Scorecard</span>
+                    <span class="px-2 py-0.5 rounded text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-300">12/12 PASSED (100%)</span>
+                </h3>
+                <button onclick="closeEvalsModal()" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+            </div>
+            <div id="evals-content" class="flex-1 overflow-y-auto py-4 px-3 bg-slate-50 border border-slate-200 rounded-xl my-4 text-xs font-mono text-slate-800 whitespace-pre-wrap">
+                Loading evaluation results...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentRunId = null;
+        let eventSource = null;
+
+        // Theme management: default is 'light'
+        function initTheme() {
+            const savedTheme = localStorage.getItem('workgraph_theme') || 'light';
+            setTheme(savedTheme);
+        }
+
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.contains('dark');
+            setTheme(isDark ? 'light' : 'dark');
+        }
+
+        function setTheme(theme) {
+            const html = document.documentElement;
+            const icon = document.getElementById('theme-icon');
+            if (theme === 'dark') {
+                html.classList.remove('light');
+                html.classList.add('dark');
+                if (icon) icon.innerText = '🌙 Dark';
+                localStorage.setItem('workgraph_theme', 'dark');
+            } else {
+                html.classList.remove('dark');
+                html.classList.add('light');
+                if (icon) icon.innerText = '☀️ Light';
+                localStorage.setItem('workgraph_theme', 'light');
+            }
+        }
+
+        initTheme();
+
+        const SCENARIOS = {
+            clean: {
+                objective: "Process latest vendor invoice using our finance policies. Clean PO fulfillment.",
+                workflow: "invoice",
+                file: "inv_01_clean_match.pdf",
+                fault: null
+            },
+            timeout: {
+                objective: "Process invoice with simulated post-commit gateway timeout. Demonstrate uncertain state reconciliation.",
+                workflow: "invoice",
+                file: "inv_01_clean_match.pdf",
+                fault: "timeout_after_commit"
+            },
+            mismatch: {
+                objective: "Process invoice for Global Cloud Tech. Detect variance and halt for human manager authorization.",
+                workflow: "invoice",
+                file: "inv_02_amount_mismatch.pdf",
+                fault: null
+            },
+            learned_exception: {
+                objective: "Process Vendor X invoice with 3.0% fuel surcharge utilizing previously learned authorized exception.",
+                workflow: "invoice",
+                file: "inv_03_vendor_x_surcharge.pdf",
+                fault: null
+            },
+            sales_report: {
+                objective: "Extract weekly CRM deals, compute pipeline metrics, generate verified Excel workbook, and dispatch to leadership.",
+                workflow: "sales_report",
+                fault: null
+            }
+        };
+
+        function launchPreset(key) {
+            const sc = SCENARIOS[key];
+            if (!sc) return;
+            document.getElementById("objective-input").value = sc.objective;
+            startRun(sc.objective, sc.workflow, sc.file, sc.fault);
+        }
+
+        function startCustomRun() {
+            const obj = document.getElementById("objective-input").value;
+            startRun(obj, "invoice", "inv_01_clean_match.pdf", null);
+        }
+
+        async function startRun(objective, workflow_type, invoice_file, fault) {
+            document.getElementById("run-btn").disabled = true;
+            document.getElementById("step-btn").disabled = false;
+            document.getElementById("events-stream-box").innerHTML = "";
+            document.getElementById("evidence-items-box").innerHTML = "";
+            document.getElementById("reconciliation-indicator").classList.add("hidden");
+
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            const res = await fetch("/api/runs", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    objective: objective,
+                    workflow_type: workflow_type,
+                    invoice_file: invoice_file,
+                    fault: fault,
+                    auto_run: true
+                })
+            });
+
+            const data = await res.json();
+            currentRunId = data.run_id;
+            document.getElementById("run-meta-info").innerText = `Run ID: ${currentRunId} • Workflow: ${workflow_type}`;
+
+            renderPlan(data.plan);
+            connectSSE(currentRunId);
+        }
+
+        function connectSSE(runId) {
+            eventSource = new EventSource(`/api/runs/${runId}/stream`);
+
+            eventSource.onmessage = (e) => {
+                const event = JSON.parse(e.data);
+                appendEventLog(event);
+
+                if (event.event_type === "APPROVAL_REQUESTED") {
+                    showApprovalModal(event.payload);
+                }
+
+                if (event.event_type === "STEP_RECONCILED") {
+                    document.getElementById("reconciliation-indicator").classList.remove("hidden");
+                }
+
+                if (event.event_type === "EVIDENCE_ATTACHED") {
+                    appendEvidence(event.payload);
+                }
+
+                // Poll run state for UI graph update
+                updateRunState();
+
+                if (event.event_type === "STREAM_CLOSED") {
+                    eventSource.close();
+                    document.getElementById("run-btn").disabled = false;
+                    document.getElementById("step-btn").disabled = true;
+                }
+            };
+        }
+
+        async function updateRunState() {
+            if (!currentRunId) return;
+            const res = await fetch(`/api/runs/${currentRunId}`);
+            if (!res.ok) return;
+            const state = await res.json();
+
+            const statusBadge = document.getElementById("run-status-badge");
+            statusBadge.innerText = state.terminal_outcome || state.status;
+            
+            if (state.terminal_outcome === "COMPLETED_VERIFIED" || state.terminal_outcome === "COMPLETED_AFTER_APPROVAL") {
+                statusBadge.className = "px-2.5 py-0.5 rounded-full text-xs font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-300";
+            } else if (state.status === "WAITING_APPROVAL") {
+                statusBadge.className = "px-2.5 py-0.5 rounded-full text-xs font-bold uppercase bg-amber-50 text-amber-800 border border-amber-300";
+            } else {
+                statusBadge.className = "px-2.5 py-0.5 rounded-full text-xs font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200";
+            }
+
+            if (state.plan) {
+                renderPlan(state.plan);
+            }
+        }
+
+        function renderPlan(plan) {
+            if (!plan || !plan.steps) return;
+            const container = document.getElementById("graph-nodes-container");
+            container.innerHTML = "";
+
+            plan.steps.forEach((step, idx) => {
+                const isRunning = step.status === "RUNNING";
+                const isWaiting = step.status === "WAITING_APPROVAL";
+                const isDone = step.status === "COMPLETED" || step.status === "VERIFIED";
+                const isUncertain = step.status === "UNCERTAIN";
+                const isFailed = step.status === "FAILED";
+
+                let borderClass = "border-slate-200 bg-white/90 shadow-2xs";
+                let badgeClass = "bg-slate-100 text-slate-600 border border-slate-200";
+                let pulseClass = "";
+
+                if (isRunning) {
+                    borderClass = "border-blue-400 bg-blue-50/90 shadow-sm";
+                    badgeClass = "bg-blue-600 text-white font-bold";
+                    pulseClass = "pulse-active";
+                } else if (isWaiting) {
+                    borderClass = "border-amber-400 bg-amber-50/90 shadow-sm";
+                    badgeClass = "bg-amber-600 text-white font-bold";
+                    pulseClass = "pulse-warning";
+                } else if (isDone) {
+                    borderClass = "border-emerald-300 bg-emerald-50/70 shadow-2xs";
+                    badgeClass = "bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold";
+                } else if (isUncertain) {
+                    borderClass = "border-amber-300 bg-amber-50/70 shadow-2xs";
+                    badgeClass = "bg-amber-600 text-white font-bold";
+                } else if (isFailed) {
+                    borderClass = "border-red-300 bg-red-50/70 shadow-2xs";
+                    badgeClass = "bg-red-600 text-white font-bold";
+                }
+
+                const riskBadge = step.risk === "irreversible" 
+                    ? '<span class="px-1.5 py-0.5 rounded text-[10px] bg-red-50 text-red-700 font-bold border border-red-200">IRREVERSIBLE</span>'
+                    : (step.risk === "write" ? '<span class="px-1.5 py-0.5 rounded text-[10px] bg-amber-50 text-amber-800 font-bold border border-amber-200">WRITE</span>' : '<span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600 font-medium border border-slate-200">READ</span>');
+
+                const nodeHtml = `
+                <div class="p-3.5 rounded-xl border ${borderClass} ${pulseClass} transition-all duration-300 flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <span class="w-6 h-6 rounded-full bg-white border border-slate-300 flex items-center justify-center text-xs font-mono text-slate-600 font-bold shadow-2xs">
+                            ${idx + 1}
+                        </span>
+                        <div>
+                            <div class="text-sm font-semibold text-slate-900 flex items-center space-x-2">
+                                <span>${step.goal}</span>
+                                ${riskBadge}
+                            </div>
+                            <div class="text-xs font-mono text-slate-500 mt-0.5">
+                                tool: <span class="text-blue-600 font-semibold">${step.tool}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="px-2.5 py-1 rounded text-xs uppercase tracking-wider ${badgeClass}">
+                            ${step.status}
+                        </span>
+                    </div>
+                </div>
+                `;
+                container.innerHTML += nodeHtml;
+            });
+        }
+
+        function appendEventLog(ev) {
+            const box = document.getElementById("events-stream-box");
+            if (box.children.length === 1 && box.children[0].innerText.includes("Awaiting")) {
+                box.innerHTML = "";
+            }
+
+            let actorColor = "text-slate-500";
+            if (ev.actor === "llm") actorColor = "text-cyan-700 font-bold";
+            if (ev.actor === "human") actorColor = "text-amber-700 font-bold";
+            if (ev.actor === "code") actorColor = "text-indigo-700 font-semibold";
+
+            const logLine = `
+            <div class="py-1 border-b border-slate-200/70 flex items-start space-x-2">
+                <span class="text-slate-400 font-mono">${ev.seq ? '#' + ev.seq : '•'}</span>
+                <span class="${actorColor}">[${ev.actor || 'SYS'}]</span>
+                <span class="text-slate-900 font-semibold">${ev.event_type}</span>
+                <span class="text-slate-600 truncate flex-1">${JSON.stringify(ev.payload || {})}</span>
+            </div>
+            `;
+            box.innerHTML += logLine;
+            box.scrollTop = box.scrollHeight;
+
+            const badge = document.getElementById("event-count-badge");
+            badge.innerText = `${box.children.length} events`;
+        }
+
+        function appendEvidence(item) {
+            const box = document.getElementById("evidence-items-box");
+            if (box.innerText.includes("Evidence items will appear")) {
+                box.innerHTML = "";
+            }
+
+            const itemHtml = `
+            <div class="p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono shadow-2xs">
+                <div class="flex items-center justify-between">
+                    <span class="font-bold text-indigo-700">[${item.id}]</span>
+                    <span class="text-[10px] text-slate-500 uppercase tracking-wider">${item.kind}</span>
+                </div>
+                <div class="text-slate-900 mt-1 font-sans text-xs font-medium">${item.title}</div>
+                <div class="text-slate-500 text-[10px] mt-0.5 truncate">SHA-256: ${item.hash}</div>
+            </div>
+            `;
+            box.innerHTML += itemHtml;
+
+            const badge = document.getElementById("evidence-count-badge");
+            badge.innerText = `${box.children.length} items`;
+        }
+
+        function showApprovalModal(payload) {
+            document.getElementById("modal-step-id").innerText = `STEP: ${payload.step_id || 'step_register_bill'}`;
+            document.getElementById("modal-reason").innerText = payload.reason || "Policy threshold exceeded.";
+            document.getElementById("approval-modal").classList.remove("hidden");
+            document.getElementById("approval-modal").classList.add("flex");
+        }
+
+        async function submitDecision(decision) {
+            document.getElementById("approval-modal").classList.add("hidden");
+            document.getElementById("approval-modal").classList.remove("flex");
+
+            const learnAsException = document.getElementById("learn-exception-chk").checked;
+
+            await fetch(`/api/runs/${currentRunId}/approve`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    decision: decision,
+                    learn_as_exception: learnAsException,
+                    exception_notes: "Authorized by Finance Director from WorkGraph control UI"
+                })
+            });
+        }
+
+        async function stepRun() {
+            if (!currentRunId) return;
+            await fetch(`/api/runs/${currentRunId}/step`, { method: "POST" });
+            updateRunState();
+        }
+
+        async function openEvalsModal() {
+            const res = await fetch("/api/evals/report");
+            const data = await res.json();
+            document.getElementById("evals-content").innerText = data.content;
+            document.getElementById("evals-modal").classList.remove("hidden");
+            document.getElementById("evals-modal").classList.add("flex");
+        }
+
+        function closeEvalsModal() {
+            document.getElementById("evals-modal").classList.add("hidden");
+            document.getElementById("evals-modal").classList.remove("flex");
+        }
+    </script>
+</body>
+</html>

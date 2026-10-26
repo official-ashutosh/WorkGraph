@@ -1,0 +1,21 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# SQLite databases
+*.db
+*.sqlite3
+
+# Pytest & environments
+.pytest_cache/
+.env
+venv/
+.venv/
+
+# Playwright video demo temp files
+data/demo_video/page@*.webm
+
+# OS files
+.DS_Store
+Thumbs.db

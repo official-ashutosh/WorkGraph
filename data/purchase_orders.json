@@ -1,0 +1,68 @@
+[
+  {
+    "po_number": "PO-2026-001",
+    "vendor_id": "VEND-001",
+    "vendor_name": "Acme Industrial Supply",
+    "total_amount": 1250.00,
+    "currency": "USD",
+    "status": "APPROVED",
+    "items": [
+      {"description": "Industrial Fasteners Grade 8", "quantity": 500, "unit_price": 2.50}
+    ]
+  },
+  {
+    "po_number": "PO-2026-002",
+    "vendor_id": "VEND-002",
+    "vendor_name": "Global Cloud Technologies",
+    "total_amount": 3400.00,
+    "currency": "USD",
+    "status": "APPROVED",
+    "items": [
+      {"description": "Enterprise Cloud Hosting Q1", "quantity": 1, "unit_price": 3400.00}
+    ]
+  },
+  {
+    "po_number": "PO-2026-003",
+    "vendor_id": "VEND-003",
+    "vendor_name": "Starlight Logistics Corp",
+    "total_amount": 1800.00,
+    "currency": "USD",
+    "status": "APPROVED",
+    "items": [
+      {"description": "Freight & Warehousing Services", "quantity": 1, "unit_price": 1800.00}
+    ]
+  },
+  {
+    "po_number": "PO-2026-004",
+    "vendor_id": "VEND-004",
+    "vendor_name": "Vendor X Logistics",
+    "total_amount": 2000.00,
+    "currency": "USD",
+    "status": "APPROVED",
+    "items": [
+      {"description": "Dedicated Linehaul Route 14", "quantity": 1, "unit_price": 2000.00}
+    ]
+  },
+  {
+    "po_number": "PO-2026-005",
+    "vendor_id": "VEND-005",
+    "vendor_name": "Nova Office Essentials",
+    "total_amount": 450.00,
+    "currency": "USD",
+    "status": "APPROVED",
+    "items": [
+      {"description": "Ergonomic Desk Accessories", "quantity": 5, "unit_price": 90.00}
+    ]
+  },
+  {
+    "po_number": "PO-2026-006",
+    "vendor_id": "VEND-001",
+    "vendor_name": "Acme Industrial Supply",
+    "total_amount": 7500.00,
+    "currency": "USD",
+    "status": "APPROVED",
+    "items": [
+      {"description": "Heavy CNC Milling Replacement Motor", "quantity": 1, "unit_price": 7500.00}
+    ]
+  }
+]

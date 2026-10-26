@@ -1,0 +1,6 @@
+vendor_id,name,contact_email,payment_terms,tax_id,status,manager_approval_threshold
+VEND-001,Acme Industrial Supply,billing@acmeindustrial.com,Net 30,US-84920192,active,5000.00
+VEND-002,Global Cloud Technologies,ap@globalcloudtech.io,Net 15,US-73910482,active,5000.00
+VEND-003,Starlight Logistics Corp,invoicing@starlightlog.com,Net 30,US-19283019,active,5000.00
+VEND-004,Vendor X Logistics,accounts@vendor-x.com,Net 30,US-99182301,active,3000.00
+VEND-005,Nova Office Essentials,sales@novaoffice.com,Due Upon Receipt,US-48291048,active,2500.00

@@ -1,0 +1,103 @@
+scenarios:
+  - id: 1
+    name: "Clean Invoice Match"
+    file: "inv_01_clean_match.pdf"
+    fault: null
+    expected_outcome: "COMPLETED_VERIFIED"
+    expected_duplicates: 0
+    description: "Standard clean match against PO-2026-001 with 0% variance."
+
+  - id: 2
+    name: "Timeout After Commit (Uncertain State)"
+    file: "inv_01_clean_match.pdf"
+    fault: "timeout_after_commit"
+    expected_outcome: "COMPLETED_VERIFIED"
+    expected_duplicates: 0
+    description: "Write succeeds in database but response hangs/504. Active reconciliation verifies record with zero duplicates."
+
+  - id: 3
+    name: "Fail Before Commit (Deadlock)"
+    file: "inv_01_clean_match.pdf"
+    fault: "fail_before_commit"
+    expected_outcome: "COMPLETED_VERIFIED"
+    expected_duplicates: 0
+    description: "First attempt fails with 500 without commit. Retry backoff succeeds on attempt 2."
+
+  - id: 4
+    name: "Amount Mismatch - Approver Approves"
+    file: "inv_02_amount_mismatch.pdf"
+    fault: null
+    approver_decision: "APPROVED"
+    expected_outcome: "COMPLETED_AFTER_APPROVAL"
+    expected_duplicates: 0
+    description: "+7.35% variance exceeds 2% policy tolerance. Execution halts, manager approves with evidence."
+
+  - id: 5
+    name: "Amount Mismatch - Approver Rejects"
+    file: "inv_02_amount_mismatch.pdf"
+    fault: null
+    approver_decision: "REJECTED"
+    expected_outcome: "ESCALATED"
+    expected_duplicates: 0
+    description: "+7.35% variance flagged. Human manager rejects unapproved charge. Zero bills written to ledger."
+
+  - id: 6
+    name: "Duplicate Invoice Submission"
+    file: "inv_04_duplicate.pdf"
+    fault: null
+    preseed_duplicate: true
+    expected_outcome: "REJECTED_BY_POLICY"
+    expected_duplicates: 0
+    description: "Same invoice number INV-2026-101. Precheck flags duplicate, guard immediately halts with rejection."
+
+  - id: 7
+    name: "Unknown / Unapproved Vendor"
+    file: "inv_05_unknown_vendor.pdf"
+    fault: null
+    expected_outcome: "REJECTED_BY_POLICY"
+    expected_duplicates: 0
+    description: "Vendor VEND-999 is unverified. Guard blocks execution with zero ledger mutation."
+
+  - id: 8
+    name: "UI Selector Drift"
+    file: "inv_01_clean_match.pdf"
+    fault: "selector_drift"
+    expected_outcome: "COMPLETED_VERIFIED"
+    expected_duplicates: 0
+    description: "Submit button ID and label altered. Playwright adapter falls back to accessibility tree inspection."
+
+  - id: 9
+    name: "Session Expiry Mid-Run"
+    file: "inv_01_clean_match.pdf"
+    fault: "session_expire"
+    expected_outcome: "COMPLETED_VERIFIED"
+    expected_duplicates: 0
+    description: "Session cookie invalidated mid-request. Automatic re-authentication refreshes token."
+
+  - id: 10
+    name: "Learned Exception - Within Authorized 3% Band"
+    file: "inv_03_vendor_x_surcharge.pdf"
+    fault: null
+    pre_learn_exception: { vendor_id: "VEND-004", tolerance_pct: 3.0 }
+    expected_outcome: "COMPLETED_VERIFIED"
+    expected_duplicates: 0
+    description: "Vendor X invoice has 3.0% fuel surcharge. Matches learned human exception; passes automatically."
+
+  - id: 11
+    name: "Learned Exception - Exceeds Band at 4%"
+    file: "inv_03b_vendor_x_over_limit.pdf"
+    fault: null
+    pre_learn_exception: { vendor_id: "VEND-004", tolerance_pct: 3.0 }
+    approver_decision: "APPROVED"
+    expected_outcome: "COMPLETED_AFTER_APPROVAL"
+    expected_duplicates: 0
+    description: "Vendor X surcharge is 4.0%. Exceeds learned 3.0% exception. Correctly pauses for human re-authorization."
+
+  - id: 12
+    name: "Generalization - Weekly Sales Report"
+    workflow: "sales_report"
+    fault: null
+    approver_decision: "APPROVED"
+    expected_outcome: "COMPLETED_AFTER_APPROVAL"
+    expected_duplicates: 0
+    description: "Different tool surface (CRM deals + XLSX). Dispatches report via irreversible email gate."

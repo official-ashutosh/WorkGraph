@@ -1,0 +1,216 @@
+{
+  "compiled_rules": [
+    {
+      "id": "RULE_APPROVED_VENDOR",
+      "source_doc": "finance_policy.md",
+      "source_quote": "Every invoice submitted for payment must originate from an authorized vendor on the Corporate Approved Vendor List",
+      "condition": {
+        "field": "vendor_status",
+        "op": "==",
+        "value": "active"
+      },
+      "action": "pass",
+      "reason": "Invoice vendor must be an active approved vendor. Unapproved vendors must be rejected."
+    },
+    {
+      "id": "RULE_PO_VARIANCE_TOLERANCE",
+      "source_doc": "finance_policy.md",
+      "source_quote": "If the total invoice amount matches the PO amount exactly, or differs by no more than 2.00%, the invoice is approved for automated bill creation. If the variance ... exceeds 2.00%, automated bill creation is strictly prohibited ... explicit Human Manager Approval is required",
+      "condition": {
+        "field": "variance_pct",
+        "op": "<=",
+        "value": 2.0
+      },
+      "action": "pass",
+      "reason": "Invoice variance over PO amount must be within 2.0% tolerance, else requires manager approval."
+    },
+    {
+      "id": "RULE_MANAGER_THRESHOLD",
+      "source_doc": "finance_policy.md",
+      "source_quote": "Any invoice where the total bill amount equals or exceeds $5,000.00 USD requires mandatory Finance Director Approval",
+      "condition": {
+        "field": "total_amount",
+        "op": "<",
+        "value": 5000.00
+      },
+      "action": "pass",
+      "reason": "Transactions $5,000.00 USD and above require Finance Director authorization."
+    },
+    {
+      "id": "RULE_DUPLICATE_PREVENTION",
+      "source_doc": "finance_policy.md",
+      "source_quote": "Under no circumstances may an invoice with an identical Invoice Number and Vendor ID be registered more than once",
+      "condition": {
+        "field": "is_duplicate",
+        "op": "==",
+        "value": false
+      },
+      "action": "pass",
+      "reason": "Duplicate invoice numbers for the same vendor are strictly prohibited."
+    }
+  ],
+  "invoices": {
+    "inv_01_clean_match.pdf": {
+      "vendor_id": "VEND-001",
+      "vendor_name": "Acme Industrial Supply",
+      "invoice_number": "INV-2026-101",
+      "po_number": "PO-2026-001",
+      "issue_date": "2026-10-20",
+      "due_date": "2026-11-19",
+      "amount": 1250.00,
+      "currency": "USD",
+      "line_items_desc": "Industrial Fasteners Grade 8 (Box of 500) x 500 @ $2.50 = $1,250.00",
+      "quotes": {
+        "invoice_number": "Invoice Number: INV-2026-101",
+        "po_number": "PO Number: PO-2026-001",
+        "vendor_name": "Acme Industrial Supply",
+        "amount": "$1,250.00",
+        "issue_date": "Issue Date: 2026-10-20"
+      }
+    },
+    "inv_02_amount_mismatch.pdf": {
+      "vendor_id": "VEND-002",
+      "vendor_name": "Global Cloud Technologies",
+      "invoice_number": "INV-2026-102",
+      "po_number": "PO-2026-002",
+      "issue_date": "2026-10-21",
+      "due_date": "2026-11-05",
+      "amount": 3650.00,
+      "currency": "USD",
+      "line_items_desc": "Enterprise Cloud Hosting Q1 Base ($3,400.00) + Unscheduled Over-Quota Bandwidth ($250.00)",
+      "quotes": {
+        "invoice_number": "Invoice Number: INV-2026-102",
+        "po_number": "PO Number: PO-2026-002",
+        "vendor_name": "Global Cloud Technologies",
+        "amount": "$3,650.00",
+        "issue_date": "Issue Date: 2026-10-21"
+      }
+    },
+    "inv_03_vendor_x_surcharge.pdf": {
+      "vendor_id": "VEND-004",
+      "vendor_name": "Vendor X Logistics",
+      "invoice_number": "INV-2026-103",
+      "po_number": "PO-2026-004",
+      "issue_date": "2026-10-22",
+      "due_date": "2026-11-21",
+      "amount": 2060.00,
+      "currency": "USD",
+      "line_items_desc": "Dedicated Linehaul Route 14 Base Rate ($2,000.00) + Standard Diesel Fuel Surcharge 3.0% ($60.00)",
+      "quotes": {
+        "invoice_number": "Invoice Number: INV-2026-103",
+        "po_number": "PO Number: PO-2026-004",
+        "vendor_name": "Vendor X Logistics",
+        "amount": "$2,060.00",
+        "issue_date": "Issue Date: 2026-10-22"
+      }
+    },
+    "inv_03b_vendor_x_over_limit.pdf": {
+      "vendor_id": "VEND-004",
+      "vendor_name": "Vendor X Logistics",
+      "invoice_number": "INV-2026-103B",
+      "po_number": "PO-2026-004",
+      "issue_date": "2026-10-23",
+      "due_date": "2026-11-22",
+      "amount": 2080.00,
+      "currency": "USD",
+      "line_items_desc": "Dedicated Linehaul Route 14 Base Rate ($2,000.00) + Emergency Fuel Index Surcharge 4.0% ($80.00)",
+      "quotes": {
+        "invoice_number": "Invoice Number: INV-2026-103B",
+        "po_number": "PO Number: PO-2026-004",
+        "vendor_name": "Vendor X Logistics",
+        "amount": "$2,080.00",
+        "issue_date": "Issue Date: 2026-10-23"
+      }
+    },
+    "inv_04_duplicate.pdf": {
+      "vendor_id": "VEND-001",
+      "vendor_name": "Acme Industrial Supply",
+      "invoice_number": "INV-2026-101",
+      "po_number": "PO-2026-001",
+      "issue_date": "2026-10-20",
+      "due_date": "2026-11-19",
+      "amount": 1250.00,
+      "currency": "USD",
+      "line_items_desc": "Duplicate invoice INV-2026-101",
+      "quotes": {
+        "invoice_number": "Invoice Number: INV-2026-101",
+        "po_number": "PO Number: PO-2026-001",
+        "vendor_name": "Acme Industrial Supply",
+        "amount": "$1,250.00",
+        "issue_date": "Issue Date: 2026-10-20"
+      }
+    },
+    "inv_05_unknown_vendor.pdf": {
+      "vendor_id": "VEND-999",
+      "vendor_name": "Phantom Unverified Services",
+      "invoice_number": "INV-2026-999",
+      "po_number": "PO-NONE",
+      "issue_date": "2026-10-24",
+      "due_date": "2026-10-24",
+      "amount": 980.00,
+      "currency": "USD",
+      "line_items_desc": "Anonymous Consulting Retainer",
+      "quotes": {
+        "invoice_number": "Invoice Number: INV-2026-999",
+        "po_number": "PO Number: PO-NONE",
+        "vendor_name": "Phantom Unverified Services",
+        "amount": "$980.00",
+        "issue_date": "Issue Date: 2026-10-24"
+      }
+    },
+    "inv_06_over_threshold.pdf": {
+      "vendor_id": "VEND-001",
+      "vendor_name": "Acme Industrial Supply",
+      "invoice_number": "INV-2026-106",
+      "po_number": "PO-2026-006",
+      "issue_date": "2026-10-25",
+      "due_date": "2026-11-24",
+      "amount": 7500.00,
+      "currency": "USD",
+      "line_items_desc": "Heavy CNC Milling Replacement Motor Unit",
+      "quotes": {
+        "invoice_number": "Invoice Number: INV-2026-106",
+        "po_number": "PO Number: PO-2026-006",
+        "vendor_name": "Acme Industrial Supply",
+        "amount": "$7,500.00",
+        "issue_date": "Issue Date: 2026-10-25"
+      }
+    },
+    "inv_07_older_starlight.pdf": {
+      "vendor_id": "VEND-003",
+      "vendor_name": "Starlight Logistics Corp",
+      "invoice_number": "INV-2026-080",
+      "po_number": "PO-2026-003",
+      "issue_date": "2026-09-01",
+      "due_date": "2026-10-01",
+      "amount": 1800.00,
+      "currency": "USD",
+      "line_items_desc": "August Warehousing & Handling",
+      "quotes": {
+        "invoice_number": "Invoice Number: INV-2026-080",
+        "po_number": "PO Number: PO-2026-003",
+        "vendor_name": "Starlight Logistics Corp",
+        "amount": "$1,800.00",
+        "issue_date": "Issue Date: 2026-09-01"
+      }
+    },
+    "inv_08_latest_starlight.pdf": {
+      "vendor_id": "VEND-003",
+      "vendor_name": "Starlight Logistics Corp",
+      "invoice_number": "INV-2026-108",
+      "po_number": "PO-2026-003",
+      "issue_date": "2026-10-26",
+      "due_date": "2026-11-25",
+      "amount": 1800.00,
+      "currency": "USD",
+      "line_items_desc": "October Freight & Warehousing Services",
+      "quotes": {
+        "invoice_number": "Invoice Number: INV-2026-108",
+        "po_number": "PO Number: PO-2026-003",
+        "vendor_name": "Starlight Logistics Corp",
+        "amount": "$1,800.00",
+        "issue_date": "Issue Date: 2026-10-26"
+      }
+    }
+  }
+}
