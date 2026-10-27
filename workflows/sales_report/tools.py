@@ -6,13 +6,16 @@ Registers tools into global_registry with typed contracts, independent verificat
 
 import os
 import openpyxl
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from tools.registry import global_registry
 from runtime.contracts import ToolSpec, RiskLevel
 from apps.crm.data import get_weekly_deals
 
-REPORTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "reports"))
+REPORTS_DIR = os.getenv(
+    "WORKGRAPH_REPORTS_DIR",
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "reports")),
+)
 os.makedirs(REPORTS_DIR, exist_ok=True)
 
 # --- Tool 1: CRM Pull Deals ---

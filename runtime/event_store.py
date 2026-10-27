@@ -10,7 +10,10 @@ import os
 from typing import List, Optional, Dict, Any
 from runtime.contracts import Event, EventActor, RunState, ExecutionPlan, PlanStep, TerminalOutcome, StepStatus, ApprovalRequest, EvidenceItem
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "workgraph.db")
+DB_PATH = os.getenv(
+    "WORKGRAPH_EVENT_DB",
+    os.path.join(os.path.dirname(__file__), "..", "data", "workgraph.db"),
+)
 
 def get_event_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)

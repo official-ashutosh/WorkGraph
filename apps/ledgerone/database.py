@@ -10,7 +10,10 @@ import os
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "ledgerone.db")
+DB_PATH = os.getenv(
+    "LEDGERONE_DB_PATH",
+    os.path.join(os.path.dirname(__file__), "ledgerone.db"),
+)
 DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))
 
 def get_db():

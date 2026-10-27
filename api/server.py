@@ -118,6 +118,11 @@ def get_run(run_id: str):
     }
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 @app.post("/api/runs/{run_id}/step")
 def step_run(run_id: str):
     state = orchestrator.execute_next_step(run_id)

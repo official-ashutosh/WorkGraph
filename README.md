@@ -1,16 +1,16 @@
 # WorkGraph: Company-Aware AI Employee Runtime
 
-> **Core Operational Principle:** *The LLM proposes. Deterministic code authorizes, executes, recovers, and verifies. Cryptographic evidence proves it.*
+> **Core Operational Principle:** *The model proposes. Deterministic code authorizes, executes, recovers, and verifies. Evidence records what happened.*
 
-WorkGraph is an enterprise-grade AI employee runtime engineered for complex, stateful back-office automation. Given a natural language business objective, WorkGraph retrieves organizational standard operating procedures (SOPs), compiles typed policy rules, synthesizes a validated execution graph (DAG), and drives real web applications via Playwright.
+WorkGraph is a local prototype for controlled, stateful back-office automation. It runs invoice processing and weekly sales reporting against self-hosted mock business applications, with deterministic policy checks, approval gates, recovery, and independent read-back verification. In the current offline build, plans and invoice extractions come from fixed workflow templates and replay fixtures; this demonstrates the control runtime, not open-ended live-model autonomy.
 
-Unlike naive LLM tool-calling loops, WorkGraph strictly isolates model reasoning from the system of record: deterministic guards enforce role-based permissions, reconcile uncertain network states (e.g. post-commit save timeouts) to achieve **zero duplicate writes**, halt at human approval checkpoints, and independently verify every transaction out-of-band with cryptographic evidence bundles.
+The design principle is: **proposals do not authorize mutations**. Deterministic guards enforce permissions and policy, request human approval when required, and verify saved records independently. Evidence items carry SHA-256 content hashes for integrity checks; they are not digitally signed or externally anchored.
 
 ---
 
 ## ⚡ Quick Start (Run Locally in Under 2 Minutes)
 
-WorkGraph runs **100% offline out-of-the-box** using deterministic **Record/Replay Mode** (no external API key or model account required).
+WorkGraph runs offline using deterministic **Record/Replay Mode** (no external API key required). The current provider uses stored fixtures and workflow templates; a live model-backed planner is not implemented yet.
 
 ### 1. Install Dependencies & Seed Data
 ```bash
@@ -39,21 +39,34 @@ python evals/runner.py
 ```
 *Benchmarks all 12 fault-injection, policy-escalation, and generalization scenarios, printing the comparative ablation score.*
 
+### Deploy with Docker Compose
+```bash
+docker compose up --build -d
+docker compose ps
+```
+
+Open the UI at `http://localhost:8080`; LedgerOne is at `http://localhost:8000`. Compose persists runtime databases and generated reports in the `workgraph_state` volume. Use `docker compose logs -f workgraph` to inspect startup and `docker compose down` to stop without deleting state.
+
+**Security:** This is a mock/demo application with unauthenticated control APIs and seeded LedgerOne credentials. Compose binds ports to localhost by default. Do not expose it directly to the public internet; use a trusted network or an authenticated TLS reverse proxy. Setting `WORKGRAPH_BIND_ADDRESS=0.0.0.0` or `LEDGERONE_BIND_ADDRESS=0.0.0.0` exposes the service on all host interfaces.
+
 ---
 
-## 📊 Benchmark Results: WorkGraph vs. No-Guard Baseline
+## 📊 Measured Guard Ablation
 
-In automated evaluation across 12 realistic failure, policy variance, and generalization scenarios, WorkGraph achieved a **100% verified task success rate** with **0 duplicate writes** and **0 false completions**:
+The harness runs each of 12 scenarios twice from a reset app state. Both arms use the same planner, executor, reconciliation, independent verifier, and mock LedgerOne app; only the WorkGraph guard (grounding, permissions, policy decisions, and approval gates) is disabled in the baseline. This isolates guard behavior, not the value of reconciliation. LedgerOne also rejects duplicate vendor/invoice pairs itself, so this experiment does not claim the guard alone prevents duplicate rows.
 
-| Evaluation Metric | WorkGraph (Guard + Reconciler) | Baseline (No-Guard Tool Loop) | Target / Spec |
+Latest local run:
+
+| Evaluation Metric | Guarded | Guard Disabled | Target |
 | :--- | :---: | :---: | :---: |
-| **Verified Task Success Rate** | **100.0% (12/12)** | 50.0% (6/12) | > 90% |
-| **Duplicate Writes to Ledger** | **0 (Zero)** | 3 (Severe Data Corruption) | **0** |
-| **False Completion Rate** | **0.0% (0/12)** | 33.3% (4/12) | **0%** |
-| **Correct Escalation / Approval Rate** | **100.0%** | 0.0% (Blind Execution) | 100% |
-| **Mean Wall-Clock Latency** | **0.24s** | 1.84s | < 5.0s |
+| **Expected Outcome Match** | **100.0% (12/12)** | 50.0% (6/12) | Report measured |
+| **Unsafe Completion / Approval Bypass** | **0 (0.0%)** | 5 (41.7%) | **0** |
+| **Duplicate Rows** | **0** | 0 | **0** |
+| **Mean Execution Steps** | **7.4** | 7.9 | Report measured |
 
-### Scenario Breakdown (All 12 Scenarios Passing)
+The guard-disabled arm completes several actions that should have paused or been rejected. Duplicate rows remain at zero because the application itself rejects duplicates. Full per-scenario outcomes and measured timing are written to [`evals/report.md`](evals/report.md) whenever the harness runs.
+
+### Guarded Scenario Results
 1. **Clean Invoice Match:** Verified clean PO match with 0% variance &rarr; `COMPLETED_VERIFIED`
 2. **Timeout After Commit (Uncertain State):** 504 Gateway timeout after DB write &rarr; Reconciled ground truth &rarr; `0 Duplicates`
 3. **Fail Before Commit (Deadlock):** Database 500 error &rarr; Bounded retry with exponential backoff &rarr; `COMPLETED_VERIFIED`
@@ -61,7 +74,7 @@ In automated evaluation across 12 realistic failure, policy variance, and genera
 5. **Amount Mismatch (Rejected):** Human manager rejects unauthorized surcharge &rarr; Zero database mutation &rarr; `ESCALATED`
 6. **Duplicate Invoice Submission:** Identical invoice number submitted &rarr; Precheck halts with documented reason &rarr; `REJECTED_BY_POLICY`
 7. **Unknown / Unapproved Vendor:** Vendor not in approved master list &rarr; Immediate guard block &rarr; `REJECTED_BY_POLICY`
-8. **UI Selector Drift:** Submit button ID altered &rarr; Fallback to accessibility tree role inspection &rarr; `COMPLETED_VERIFIED`
+8. **Selector Drift Fault:** The fault is seeded, but this eval uses the direct HTTP adapter; it does not test the Playwright fallback.
 9. **Session Expiry Mid-Run:** Session token expired &rarr; Re-authenticates credentials and resumes step &rarr; `COMPLETED_VERIFIED`
 10. **Learned Exception (Within 3% Band):** Vendor X 3.0% fuel surcharge &rarr; Matches learned human decision &rarr; `Auto-Passed`
 11. **Learned Exception (Exceeds Band at 4%):** Vendor X surcharge increases to 4.0% &rarr; Correctly pauses for human re-authorization &rarr; `COMPLETED_AFTER_APPROVAL`
@@ -74,10 +87,10 @@ In automated evaluation across 12 realistic failure, policy variance, and genera
 ```mermaid
 flowchart TD
     OBJ([Plain English Objective]) --> INTAKE[Intake & Context Retrieval]
-    INTAKE --> PLAN[LLM Plans Execution DAG]
+    INTAKE --> PLAN[Workflow plan]
     
     subgraph Execution Loop Per Step
-        PLAN --> PROPOSE[LLM Proposes Action]
+        PLAN --> PROPOSE[Propose next planned tool action]
         PROPOSE --> GUARD{Deterministic Guard}
         
         GUARD -->|Check Fails| HALT[Pause / Rejection Gate]
@@ -101,12 +114,11 @@ flowchart TD
 
 | Subsystem | Managed By | Responsibility |
 | :--- | :---: | :--- |
-| **Objective Parsing** | LLM | Interprets open-ended intent and identifies relevant documents |
-| **DAG Synthesis** | LLM | Drafts structured plan steps and dependencies |
-| **Field Extraction** | LLM | Extracts values with mandatory verbatim source quotes |
+| **Workflow selection / planning** | Fixed templates | Selects predefined invoice or sales-report steps; no live objective-to-plan model call yet |
+| **Field extraction** | Replay fixtures | Supplies deterministic extracted fields and quotes for seeded invoices |
 | **Permission Checks** | **Deterministic Code** | Enforces RBAC permissions per caller role and tool |
 | **Policy Evaluation** | **Deterministic Code** | Evaluates mathematical tolerances, thresholds, and vendor allow-lists |
-| **Grounding Verification**| **Deterministic Code** | Rejects any claim where extracted text is not found in source document |
+| **Grounding Verification**| **Deterministic Code** | Checks seeded invoice number, vendor, and amount against extracted source text before downstream steps |
 | **Idempotency & Reconcile**| **Deterministic Code** | Hashes business keys; queries ground truth before retrying after timeouts |
 | **Independent Read-Back** | **Deterministic Code** | Out-of-band verification against system of record (fresh HTTP/session) |
 | **Evidence Bundle** | **Deterministic Code** | Cryptographic SHA-256 hashes of records, approvals, and rule evaluations |
@@ -115,24 +127,20 @@ flowchart TD
 
 ## 🛡️ Reliability Engineering: Uncertain-State Recovery
 
-In distributed enterprise automation, network timeouts frequently occur **after** a database commit has succeeded upstream (e.g., HTTP 504 Gateway Timeout or dropped socket). 
+In distributed automation, a network timeout can occur **after** a database commit has succeeded upstream. The seeded LedgerOne fault reproduces this case.
 
-- **Naive Tool Loops:** Blindly retry the POST request, creating duplicate bill liabilities or crashing on duplicate invoice rejections.
-- **WorkGraph Reconciler:** Catches the ambiguous network failure, transitions the node to `UNCERTAIN`, and immediately executes an active ground-truth query (`api/bills/check`). Discovering that the transaction committed upstream, WorkGraph marks the step `VERIFIED` and proceeds directly to post-verification—achieving **0 duplicate transactions**.
+- **WorkGraph Reconciler:** Marks the write uncertain and checks the app's read endpoint before retrying. When the saved bill is found, the run continues without another write.
+- **What the current eval proves:** The timeout-after-commit scenario recovers correctly. The guard ablation keeps reconciliation enabled in both arms, and LedgerOne independently rejects duplicate invoices; neither fact should be presented as a measured guard-only reduction in duplicates.
 
 ---
 
-## 🌐 Generalization Proof: Zero Runtime Code Modifications
+## 🌐 Second Workflow: Shared Runtime, Not Yet Zero-Edit Generalization
 
-To prove true generalization, **Workflow B (Weekly Sales Report)** was implemented across a completely different tool surface (mock CRM deals, metric aggregation, Excel workbook generation, and irreversible email dispatch):
+The weekly sales-report scenario exercises the same step executor, guard, approval, and verification path using mock CRM data and Excel generation. The final email tool is a mock dispatch, not an external email integration.
 
-```bash
-# Git verification proving zero runtime changes:
-git diff --stat HEAD~1 HEAD runtime/ tools/registry.py
-# 0 files changed, 0 insertions(+), 0 deletions(-)
-```
+This is a second workflow on shared runtime components, but it does **not** yet prove that a new workflow can be added without runtime edits: the current orchestrator imports the sales tools explicitly, and the planner contains a sales-specific plan branch. A plugin or declarative workflow contract is needed to make that claim true.
 
-All sales report logic resides exclusively in `workflows/sales_report/tools.py` and `apps/crm/`, registering cleanly into `ToolRegistry` with strict typing, independent mathematical verification, and irreversible approval gates.
+The sales tools are in [`workflows/sales_report/tools.py`](workflows/sales_report/tools.py) and [`apps/crm/data.py`](apps/crm/data.py). The guard-disabled ablation measures approval bypass on this scenario; it does not send an actual email.
 
 ---
 
@@ -159,26 +167,29 @@ WorkGraph never takes the executing agent's word that a task completed:
 - Checks every field (Vendor ID, Invoice Number, Amount, Dates) against the grounded source data.
 - Packages an `EvidenceBundle` containing:
   - `EVID-REC-*`: Raw JSON of committed ledger record.
-  - `EVID-GROUND-*`: Grounding source quotes proving zero hallucination.
+  - `EVID-GROUND-*`: Extracted fields and source quotes used by the grounding check.
   - `EVID-POLICY-*`: Mathematical tolerance and rule evaluation payload.
-  - `EVID-APPR-*`: Signed human authorization record.
-- Reports are strictly constrained: LLM narratives must cite valid evidence IDs, and unreferenced claims are rejected.
+  - `EVID-APPR-*`: Human approval decision record (not a digital signature).
+- Evidence items include SHA-256 hashes, but are not signed or externally anchored. Treat the bundle as audit-supporting evidence, not tamper-proof attestation.
+- The replay reporter emits evidence IDs; a live model-generated narrative with citation validation is not currently exercised.
 
 ---
 
 ## ⚙️ Honest Technical Limitations
 
-1. **Mock Environments:** Targets are self-hosted mock applications (`LedgerOne`, `CRM`); while they feature realistic network latency, dropped sessions, and fault injection, they do not face enterprise anti-bot defenses or CAPTCHAs.
-2. **Selector Drift Fallback:** The fallback path relies on accessibility tree inspection and multi-modal reasoning, which has higher latency and token cost than structured Playwright selectors.
-3. **Scan Quality:** Extraction assumes text-layer or high-resolution PDFs; degraded physical scans would require a dedicated OCR pipeline.
-4. **SOP Rule Compilation:** Natural language SOP compilation currently requires initial human confirmation before entering active enforcement.
+1. **Mock Environments:** `LedgerOne` and `CRM` are self-hosted test applications; the email dispatch is also mocked. Results do not establish reliability on third-party SaaS products.
+2. **Model Autonomy:** The offline provider uses fixed plans and replay fixtures. Live objective-to-plan generation and general-purpose SOP compilation are not currently implemented.
+3. **Browser Path:** Invoice evaluations use the direct app test client by default; the Playwright adapter exists but is not the measured path in the eval harness.
+4. **Workflow Extension:** Sales planning and tool loading currently contain workflow-specific runtime wiring, so the zero-runtime-edit criterion remains open.
+5. **Evidence Trust:** SHA-256 hashes detect changes only when compared with trusted originals; there is no signature, append-only external anchor, or key management.
+6. **Scan Quality:** Degraded physical scans would require a dedicated OCR pipeline.
 
 ---
 
 ## 🛠️ Stack & Disclosures
 
 - **Language & Runtime:** Python 3.11+, FastAPI, Pydantic v2, SQLite (FTS5), asyncio, SSE.
-- **Browser Automation:** Playwright Chromium (headless/headed).
+- **Browser Automation:** Optional Playwright Chromium adapter; evals currently use the direct test-client path.
 - **Document & Data Processing:** ReportLab, openpyxl, httpx, PyYAML.
 - **Testing & Harness:** Pytest, pytest-asyncio, custom deterministic evaluation harness.
 - **Frontend UI:** Vanilla HTML5/CSS, Tailwind CSS CDN, Google Fonts Inter, Server-Sent Events.

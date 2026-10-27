@@ -1,15 +1,35 @@
-version: '3.8'
-
 services:
   workgraph:
     build: .
+    init: true
+    restart: unless-stopped
     ports:
-      - "8080:8080"
-      - "8000:8000"
+      - "${WORKGRAPH_BIND_ADDRESS:-127.0.0.1}:${WORKGRAPH_PORT:-8080}:8080"
+      - "${LEDGERONE_BIND_ADDRESS:-127.0.0.1}:${LEDGERONE_PORT:-8000}:8000"
     environment:
-      - RECORD_REPLAY_MODE=replay
-      - WORKGRAPH_PORT=8080
-      - LEDGERONE_URL=http://127.0.0.1:8000
+      RECORD_REPLAY_MODE: replay
+      OPEN_BROWSER: "false"
+      WORKGRAPH_HOST: 0.0.0.0
+      LEDGERONE_HOST: 0.0.0.0
+      WORKGRAPH_PORT: 8080
+      LEDGERONE_PORT: 8000
+      LEDGERONE_URL: http://127.0.0.1:8000
+      WORKGRAPH_EVENT_DB: /var/lib/workgraph/workgraph.db
+      WORKGRAPH_MEMORY_DB: /var/lib/workgraph/memory.db
+      LEDGERONE_DB_PATH: /var/lib/workgraph/ledgerone.db
+      WORKGRAPH_REPORTS_DIR: /var/lib/workgraph/reports
     volumes:
-      - ./data:/app/data
-    command: python run_demo.py
+      - workgraph_state:/var/lib/workgraph
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  workgraph_state:

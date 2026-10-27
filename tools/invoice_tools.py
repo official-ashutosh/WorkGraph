@@ -30,15 +30,11 @@ def extract_invoice_handler(pdf_path: str, **kwargs) -> Dict[str, Any]:
         if os.path.exists(alt_path):
             pdf_path = alt_path
 
-    # Read PDF text using pdfplumber if available or basic text
-    raw_text = ""
-    try:
-        import pdfplumber
-        with pdfplumber.open(pdf_path) as pdf:
-            raw_text = "\n".join([page.extract_text() or "" for page in pdf.pages])
-    except Exception:
-        # Fallback reading
-        raw_text = f"Simulated text for {os.path.basename(pdf_path)}"
+    import pdfplumber
+    with pdfplumber.open(pdf_path) as pdf:
+        raw_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+    if not raw_text.strip():
+        raise ValueError(f"No selectable text found in invoice PDF: {os.path.basename(pdf_path)}")
 
     # Call LLMProvider with record/replay support
     extracted = llm_provider.extract_invoice(pdf_path, raw_text)

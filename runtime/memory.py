@@ -13,7 +13,10 @@ from datetime import datetime
 
 from runtime.contracts import Rule, RuleCondition, RuleAction, ProvenanceKind
 
-MEMORY_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "memory.db")
+MEMORY_DB_PATH = os.getenv(
+    "WORKGRAPH_MEMORY_DB",
+    os.path.join(os.path.dirname(__file__), "..", "data", "memory.db"),
+)
 
 
 def get_memory_db():

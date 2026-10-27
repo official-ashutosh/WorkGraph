@@ -59,12 +59,12 @@ scenarios:
     description: "Vendor VEND-999 is unverified. Guard blocks execution with zero ledger mutation."
 
   - id: 8
-    name: "UI Selector Drift"
+    name: "Selector Drift (browser fallback not exercised)"
     file: "inv_01_clean_match.pdf"
     fault: "selector_drift"
     expected_outcome: "COMPLETED_VERIFIED"
     expected_duplicates: 0
-    description: "Submit button ID and label altered. Playwright adapter falls back to accessibility tree inspection."
+    description: "Fault is seeded, but the eval uses the direct app client and does not exercise Playwright selectors or fallback."
 
   - id: 9
     name: "Session Expiry Mid-Run"

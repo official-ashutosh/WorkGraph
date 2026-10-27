@@ -31,11 +31,17 @@ import workflows.sales_report.tools
 
 
 class WorkGraphOrchestrator:
-    def __init__(self, event_store: Optional[EventStore] = None, memory: Optional[CompanyMemory] = None):
+    def __init__(
+        self,
+        event_store: Optional[EventStore] = None,
+        memory: Optional[CompanyMemory] = None,
+        guard_enabled: bool = True,
+    ):
         self.event_store = event_store or EventStore()
         self.memory = memory or CompanyMemory()
         self.llm = LLMProvider()
         self.guard = Guard()
+        self.guard_enabled = guard_enabled
         self.reconciler = StateReconciler()
         self.verifier = IndependentVerifier()
         self.reporter = VerifiedReporter()
@@ -131,61 +137,73 @@ class WorkGraphOrchestrator:
             }, step_id=next_step.id)
             return self.event_store.rehydrate_run_state(run_id)
 
-        # RBAC Check
-        perm_ok, perm_err = self.guard.check_permission(tool_spec)
-        if not perm_ok:
-            self._emit(run_id, "STEP_FAILED", EventActor.CODE, {"error": perm_err}, step_id=next_step.id)
-            self._emit(run_id, "STATUS_CHANGED", EventActor.CODE, {
-                "status": "FAILED",
-                "terminal_outcome": TerminalOutcome.FAILED.value
-            })
-            return self.event_store.rehydrate_run_state(run_id)
-
-        # Policy & Risk Gate Check
         policy_res: Optional[PolicyEvaluationResult] = None
-        if next_step.tool in ("ledgerone.create_bill", "policy.evaluate_rules"):
-            rules = self.memory.get_all_rules()
-            policy_res = self.guard.evaluate_policy(rules, state.context)
-
-            # Store rule eval evidence
-            self._emit(run_id, "EVIDENCE_ATTACHED", EventActor.CODE, {
-                "id": f"EVID-POLICY-{uuid.uuid4().hex[:6].upper()}",
-                "kind": EvidenceKind.RULE_EVAL.value,
-                "title": "Deterministic Policy & Tolerance Evaluation",
-                "data": policy_res.dict(),
-                "hash": self.verifier.compute_sha256(policy_res.dict())
-            })
-
-            # Hard Policy Rejection
-            if not policy_res.allowed:
-                self._emit(run_id, "STEP_FAILED", EventActor.CODE, {
-                    "error": policy_res.rejection_reason
-                }, step_id=next_step.id)
+        if self.guard_enabled:
+            # RBAC Check
+            perm_ok, perm_err = self.guard.check_permission(tool_spec)
+            if not perm_ok:
+                self._emit(run_id, "STEP_FAILED", EventActor.CODE, {"error": perm_err}, step_id=next_step.id)
                 self._emit(run_id, "STATUS_CHANGED", EventActor.CODE, {
-                    "status": "REJECTED_BY_POLICY",
-                    "terminal_outcome": TerminalOutcome.REJECTED_BY_POLICY.value
+                    "status": "FAILED",
+                    "terminal_outcome": TerminalOutcome.FAILED.value
                 })
                 return self.event_store.rehydrate_run_state(run_id)
 
-        # Evaluate risk gate
-        already_approved = (
-            state.active_approval is not None
-            and state.active_approval.step_id == next_step.id
-            and state.active_approval.status == "APPROVED"
-        )
-        if not already_approved:
-            can_proceed, approval_req = self.guard.evaluate_step_gate(next_step, tool_spec, policy_res)
-            if not can_proceed and approval_req:
-                # PAUSE execution for human approval!
-                approval_req.run_id = run_id
-                approval_req.evidence_ids = list(state.evidence.keys())
-                self._emit(run_id, "APPROVAL_REQUESTED", EventActor.CODE, approval_req.dict(), step_id=next_step.id)
-                return self.event_store.rehydrate_run_state(run_id)
+            # Policy & Risk Gate Check
+            if next_step.tool in ("ledgerone.create_bill", "policy.evaluate_rules"):
+                rules = self.memory.get_all_rules()
+                policy_res = self.guard.evaluate_policy(rules, state.context)
+
+                self._emit(run_id, "EVIDENCE_ATTACHED", EventActor.CODE, {
+                    "id": f"EVID-POLICY-{uuid.uuid4().hex[:6].upper()}",
+                    "kind": EvidenceKind.RULE_EVAL.value,
+                    "title": "Deterministic Policy & Tolerance Evaluation",
+                    "data": policy_res.dict(),
+                    "hash": self.verifier.compute_sha256(policy_res.dict())
+                })
+
+                if not policy_res.allowed:
+                    self._emit(run_id, "STEP_FAILED", EventActor.CODE, {
+                        "error": policy_res.rejection_reason
+                    }, step_id=next_step.id)
+                    self._emit(run_id, "STATUS_CHANGED", EventActor.CODE, {
+                        "status": "REJECTED_BY_POLICY",
+                        "terminal_outcome": TerminalOutcome.REJECTED_BY_POLICY.value
+                    })
+                    return self.event_store.rehydrate_run_state(run_id)
+
+            # Evaluate risk gate
+            already_approved = (
+                state.active_approval is not None
+                and state.active_approval.step_id == next_step.id
+                and state.active_approval.status == "APPROVED"
+            )
+            if not already_approved:
+                can_proceed, approval_req = self.guard.evaluate_step_gate(next_step, tool_spec, policy_res)
+                if not can_proceed and approval_req:
+                    approval_req.run_id = run_id
+                    approval_req.evidence_ids = list(state.evidence.keys())
+                    self._emit(run_id, "APPROVAL_REQUESTED", EventActor.CODE, approval_req.dict(), step_id=next_step.id)
+                    return self.event_store.rehydrate_run_state(run_id)
 
         # --- STEP_EXECUTE ---
         try:
             handler = global_registry.get_handler(next_step.tool)
             result = handler(**step_args)
+
+            if self.guard_enabled and next_step.tool == "pdf.extract_invoice":
+                source_text = str(result.get("raw_text", "")) if isinstance(result, dict) else ""
+                grounded, grounding_errors = self.guard.check_grounding(result, source_text)
+                if not grounded:
+                    error = "; ".join(grounding_errors)
+                    self._emit(run_id, "STEP_FAILED", EventActor.CODE, {
+                        "error": f"Invoice grounding check failed: {error}"
+                    }, step_id=next_step.id)
+                    self._emit(run_id, "STATUS_CHANGED", EventActor.CODE, {
+                        "status": "FAILED",
+                        "terminal_outcome": TerminalOutcome.FAILED.value
+                    })
+                    return self.event_store.rehydrate_run_state(run_id)
 
             # Update state context with results
             if isinstance(result, dict):

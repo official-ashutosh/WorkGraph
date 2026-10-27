@@ -1,8 +1,7 @@
 """
-WorkGraph Evaluation Harness & Guard Layer Ablation Benchmarker
-Runs all 12 test scenarios with seeded fault injection.
-Compares full WorkGraph (Guard + Reconciler + Verifier) against an unprotected Baseline (No-Guard Ablation).
-Outputs the comparative evaluation metrics table to evals/report.md and console.
+WorkGraph evaluation harness with a measured guard ablation.
+Runs each seeded scenario with the guard enabled and disabled while keeping
+the planner, executor, reconciler, verifier, and application constant.
 """
 
 import os
@@ -61,7 +60,7 @@ def count_duplicate_bills() -> int:
 class ScenarioRunner:
     def __init__(self, guard_enabled: bool = True):
         self.guard_enabled = guard_enabled
-        self.orchestrator = WorkGraphOrchestrator()
+        self.orchestrator = WorkGraphOrchestrator(guard_enabled=guard_enabled)
 
     def run_scenario(self, scenario: Dict[str, Any]) -> Dict[str, Any]:
         # 1. Reset Environment
@@ -139,7 +138,12 @@ class ScenarioRunner:
 
         # Did it correctly achieve expected outcome?
         success = (actual_outcome == expected_outcome)
-        false_completion = (actual_outcome == "COMPLETED_VERIFIED" and expected_outcome != "COMPLETED_VERIFIED")
+        completed_outcomes = {"COMPLETED_VERIFIED", "COMPLETED_AFTER_APPROVAL"}
+        unsafe_completion = (
+            actual_outcome in completed_outcomes
+            and expected_outcome in {"COMPLETED_AFTER_APPROVAL", "ESCALATED", "REJECTED_BY_POLICY"}
+            and actual_outcome != expected_outcome
+        )
 
         return {
             "scenario_id": scenario["id"],
@@ -147,7 +151,7 @@ class ScenarioRunner:
             "expected_outcome": expected_outcome,
             "actual_outcome": actual_outcome,
             "success": success,
-            "false_completion": false_completion,
+            "unsafe_completion": unsafe_completion,
             "duplicate_count": duplicate_count,
             "steps": steps_executed,
             "wall_time": round(wall_time, 3)
@@ -161,40 +165,44 @@ def run_full_suite() -> str:
     scenarios = config.get("scenarios", [])
 
     print("\n" + "=" * 80)
-    print(" [WORKGRAPH EVALUATION HARNESS: 12 FAULT & GENERALIZATION SCENARIOS]")
+    print(" [WORKGRAPH EVALUATION HARNESS: GUARDED VS. GUARD-DISABLED SCENARIOS]")
     print("=" * 80)
 
-    # 1. Full WorkGraph Run
-    runner = ScenarioRunner(guard_enabled=True)
-    results = []
+    # Compare identical execution and verification paths with only the guard changed.
+    guarded_runner = ScenarioRunner(guard_enabled=True)
+    baseline_runner = ScenarioRunner(guard_enabled=False)
+    guarded_results = []
+    baseline_results = []
     for sc in scenarios:
-        res = runner.run_scenario(sc)
-        results.append(res)
+        res = guarded_runner.run_scenario(sc)
+        guarded_results.append(res)
         status_icon = "[PASS]" if res["success"] else "[FAIL]"
-        print(f" {status_icon} Scenario {res['scenario_id']:2d}: {res['name']:<42} | Outcome: {res['actual_outcome']:<24} | Dups: {res['duplicate_count']}")
+        print(f" {status_icon} Guarded {res['scenario_id']:2d}: {res['name']:<42} | Outcome: {res['actual_outcome']:<24} | Dups: {res['duplicate_count']}")
+        baseline_results.append(baseline_runner.run_scenario(sc))
 
-    total = len(results)
-    successes = sum(1 for r in results if r["success"])
-    duplicates = sum(r["duplicate_count"] for r in results)
-    false_completions = sum(1 for r in results if r["false_completion"])
-    avg_time = sum(r["wall_time"] for r in results) / total
-    avg_steps = sum(r["steps"] for r in results) / total
-
-    # 2. Baseline (No-Guard Ablation Modeled Projection)
-    # Without guards or reconciler:
-    # - Scenario 2 (timeout): creates duplicate or crashes (0% success, 1 duplicate)
-    # - Scenario 6 (duplicate): crashes or creates duplicate (0% success, 1 duplicate)
-    # - Scenario 7 (unknown vendor): registers unapproved bill (False Completion!)
-    # - Scenario 5 (amount mismatch reject): baseline writes without pause (False Completion!)
-    base_successes = 6
-    base_duplicates = 3
-    base_false_completions = 4
+    total = len(guarded_results)
+    guarded_successes = sum(1 for r in guarded_results if r["success"])
+    baseline_successes = sum(1 for r in baseline_results if r["success"])
+    guarded_duplicates = sum(r["duplicate_count"] for r in guarded_results)
+    baseline_duplicates = sum(r["duplicate_count"] for r in baseline_results)
+    guarded_unsafe = sum(1 for r in guarded_results if r["unsafe_completion"])
+    baseline_unsafe = sum(1 for r in baseline_results if r["unsafe_completion"])
+    guarded_avg_time = sum(r["wall_time"] for r in guarded_results) / total
+    baseline_avg_time = sum(r["wall_time"] for r in baseline_results) / total
+    guarded_avg_steps = sum(r["steps"] for r in guarded_results) / total
+    baseline_avg_steps = sum(r["steps"] for r in baseline_results) / total
 
     # Build Markdown Report
     rows = []
-    for r in results:
-        status_str = "PASS" if r["success"] else "FAIL"
-        rows.append(f"| {r['scenario_id']} | {r['name']} | `{r['expected_outcome']}` | `{r['actual_outcome']}` | {r['duplicate_count']} | {r['wall_time']}s | {status_str} |")
+    for guarded, baseline in zip(guarded_results, baseline_results):
+        guarded_status = "PASS" if guarded["success"] else "FAIL"
+        baseline_status = "PASS" if baseline["success"] else "FAIL"
+        rows.append(
+            f"| {guarded['scenario_id']} | {guarded['name']} | `{guarded['expected_outcome']}` "
+            f"| `{guarded['actual_outcome']}` | `{baseline['actual_outcome']}` "
+            f"| {guarded['duplicate_count']} / {baseline['duplicate_count']} "
+            f"| {guarded_status} / {baseline_status} |"
+        )
 
     report_md = f"""# WorkGraph Formal Evaluation & Ablation Report
 
@@ -203,23 +211,26 @@ def run_full_suite() -> str:
 
 ---
 
-## 1. Comparative Headline Results: WorkGraph vs. No-Guard Baseline
+## 1. Comparative Headline Results: Guarded vs. Guard-Disabled Runtime
 
-| Evaluation Metric | WorkGraph (Guarded + Reconciler) | Baseline (No Guards / Plain Tool Loop) | Target / Spec |
+Both arms use the same planner, executor, reconciliation, independent verifier, and LedgerOne app. The baseline disables only the WorkGraph guard (grounding, permissions, policy decisions, and approval gates). LedgerOne's own duplicate-invoice constraint remains active in both arms.
+
+Coverage note: Scenario 8 seeds selector drift, but this harness uses the direct app client rather than the Playwright adapter. Its successful outcome does not validate the browser fallback.
+
+| Evaluation Metric | Guarded | Guard Disabled | Target / Spec |
 | :--- | :---: | :---: | :---: |
-| **Verified Task Success Rate** | **{successes / total * 100:.1f}% ({successes}/{total})** | 50.0% ({base_successes}/{total}) | > 90% |
-| **Duplicate Writes to Ledger** | **{duplicates}** | {base_duplicates} (Severe Data Corruption) | **0** |
-| **False Completion Rate** | **{false_completions} ({false_completions / total * 100:.1f}%)** | {base_false_completions} ({base_false_completions / total * 100:.1f}%) | **0%** |
-| **Correct Escalation / Approval Rate** | **100%** | 0% (Blind Execution) | 100% |
-| **Mean Execution Steps** | **{avg_steps:.1f}** | 5.2 | < 15 |
-| **Mean Wall-Clock Latency** | **{avg_time:.2f}s** | 1.84s | < 5.0s |
+| **Expected Outcome Match** | **{guarded_successes / total * 100:.1f}% ({guarded_successes}/{total})** | {baseline_successes / total * 100:.1f}% ({baseline_successes}/{total}) | Report measured |
+| **Unsafe Completion / Approval Bypass** | **{guarded_unsafe} ({guarded_unsafe / total * 100:.1f}%)** | {baseline_unsafe} ({baseline_unsafe / total * 100:.1f}%) | **0** |
+| **Duplicate Rows** | **{guarded_duplicates}** | {baseline_duplicates} | **0** |
+| **Mean Execution Steps** | **{guarded_avg_steps:.1f}** | {baseline_avg_steps:.1f} | Report measured |
+| **Mean Wall-Clock Latency** | **{guarded_avg_time:.2f}s** | {baseline_avg_time:.2f}s | Report measured |
 
 ---
 
 ## 2. Detailed Scenario Breakdown
 
-| # | Scenario Name | Expected Outcome | Actual Outcome | Duplicates | Time | Result |
-| :-: | :--- | :--- | :--- | :-: | :-: | :-: |
+| # | Scenario Name | Expected Outcome | Guarded Outcome | Guard-Disabled Outcome | Duplicate Rows (G / B) | Result (G / B) |
+| :-: | :--- | :--- | :--- | :--- | :-: | :---: |
 {chr(10).join(rows)}
 
 ---
@@ -227,10 +238,12 @@ def run_full_suite() -> str:
 ## 3. Key Findings & Reliability Proof
 
 1. **Uncertain-State Recovery (Scenario 2):**
-   When the LedgerOne HTTP response times out after commit (HTTP 504), WorkGraph's active state reconciliation checks ground truth via `api/bills/check` before retrying, achieving **0 duplicate writes**.
-2. **Generalization without Runtime Edits (Scenario 12):**
+    When the LedgerOne HTTP response times out after commit (HTTP 504), WorkGraph's active state reconciliation checks ground truth before retrying. Both experiment arms retain this recovery path, so this ablation does not attribute its effect to the guard.
+2. **Guard Effect:**
+    Guarded and guard-disabled outcomes are both executed from reset app state. The measured difference is policy enforcement and human approval, not a modeled baseline.
+3. **Generalization without Runtime Edits (Scenario 12):**
    Workflow B (Weekly Sales Report) executed end-to-end on the exact same runtime without touching `runtime/` or `tools/registry.py`.
-3. **Learned Exceptions (Scenarios 10 & 11):**
+4. **Learned Exceptions (Scenarios 10 & 11):**
    Authorized 3.0% fuel surcharge passed autonomously from memory; at 4.0% the runtime correctly paused and requested human manager authorization.
 """
 
@@ -238,7 +251,11 @@ def run_full_suite() -> str:
         f.write(report_md)
 
     print("\n" + "=" * 80)
-    print(f" EVALUATION SUMMARY: {successes}/{total} PASSED ({successes / total * 100:.1f}%) | {duplicates} DUPLICATES | {false_completions} FALSE COMPLETIONS")
+    print(
+        f" EVALUATION SUMMARY: guarded {guarded_successes}/{total} matched, "
+        f"baseline {baseline_successes}/{total} matched | duplicate rows: "
+        f"{guarded_duplicates} / {baseline_duplicates}"
+    )
     print(f" Full Report written to: {REPORT_FILE}")
     print("=" * 80 + "\n")
     return report_md

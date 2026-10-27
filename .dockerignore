@@ -1,0 +1,12 @@
+.git
+.github
+.pytest_cache
+__pycache__
+**/__pycache__
+*.py[cod]
+*.db
+*.sqlite*
+.env
+.venv
+venv
+data/demo_video

@@ -33,11 +33,21 @@ except Exception:
     pass
 
 def start_ledgerone():
-    uvicorn.run(ledgerone_app, host="127.0.0.1", port=8000, log_level="warning")
+    uvicorn.run(
+        ledgerone_app,
+        host=os.getenv("LEDGERONE_HOST", "127.0.0.1"),
+        port=int(os.getenv("LEDGERONE_PORT", "8000")),
+        log_level="warning",
+    )
 
 
 def start_workgraph():
-    uvicorn.run(workgraph_app, host="127.0.0.1", port=8080, log_level="warning")
+    uvicorn.run(
+        workgraph_app,
+        host=os.getenv("WORKGRAPH_HOST", "127.0.0.1"),
+        port=int(os.getenv("WORKGRAPH_PORT", "8080")),
+        log_level="warning",
+    )
 
 
 def main():
@@ -54,18 +64,24 @@ def main():
     # Start LedgerOne server on port 8000
     t1 = threading.Thread(target=start_ledgerone, daemon=True)
     t1.start()
-    print("      [OK] LedgerOne ERP active on http://127.0.0.1:8000")
+    ledgerone_port = int(os.getenv("LEDGERONE_PORT", "8000"))
+    print(f"      [OK] LedgerOne ERP active on port {ledgerone_port}")
 
     # Start WorkGraph server on port 8080
     t2 = threading.Thread(target=start_workgraph, daemon=True)
     t2.start()
-    print("      [OK] WorkGraph UI active on http://127.0.0.1:8080")
+    workgraph_port = int(os.getenv("WORKGRAPH_PORT", "8080"))
+    print(f"      [OK] WorkGraph UI active on port {workgraph_port}")
 
     time.sleep(1.2)
 
-    print("\n[3/3] Opening Interactive Control UI...")
-    webbrowser.open("http://127.0.0.1:8080")
-    print("      [OK] Browser opened to http://127.0.0.1:8080")
+    print("\n[3/3] Interactive Control UI")
+    if os.getenv("OPEN_BROWSER", "true").lower() in {"1", "true", "yes"}:
+        url = f"http://127.0.0.1:{workgraph_port}"
+        webbrowser.open(url)
+        print(f"      [OK] Browser opened to {url}")
+    else:
+        print(f"      Open the UI at http://localhost:{workgraph_port}")
 
     print("\n" + "=" * 75)
     print(" DEMO SCENARIOS TO CLICK & TEST:")
